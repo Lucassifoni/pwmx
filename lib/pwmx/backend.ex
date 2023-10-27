@@ -1,5 +1,7 @@
 defmodule Pwmx.Backend do
   alias Pwmx.State
+  alias Pwmx.Paths
+  alias Pwmx.Utils
 
   @moduledoc """
   Backend module, dispatching the system calls to Elixir.File on Linux, and (in the future) behaving
@@ -9,7 +11,7 @@ defmodule Pwmx.Backend do
   """
   use GenServer
   @me __MODULE__
-  @base_path "/sys/class/pwm"
+
 
   def init(_init_arg) do
     {:ok,
@@ -28,27 +30,6 @@ defmodule Pwmx.Backend do
   def start_link(_) do
     GenServer.start_link(@me, nil, name: @me)
   end
-
-  defp to_ns(value, unit) do
-    case unit do
-      :s -> trunc(value * 1_000_000_000)
-      :ms -> trunc(value * 1_000_000)
-      :us -> trunc(value * 1_000)
-      :ns -> value
-    end
-  end
-
-  defp chip_path(chip), do: Path.join(@base_path, chip)
-  defp npwm_path(chip), do: Path.join(chip_path(chip), "npwm")
-  defp output_path(chip, output), do: Path.join(chip_path(chip), "pwm#{output}")
-  defp export_path(chip), do: Path.join(chip_path(chip), "export")
-  defp unexport_path(chip), do: Path.join(chip_path(chip), "unexport")
-  defp period_path(chip, output), do: Path.join(output_path(chip, output), "period")
-  defp duty_cycle_path(chip, output), do: Path.join(output_path(chip, output), "duty_cycle")
-  defp polarity_path(chip, output), do: Path.join(output_path(chip, output), "polarity")
-  defp enable_path(chip, output), do: Path.join(output_path(chip, output), "enable")
-  defp ensure_int(value) when is_binary(value), do: value |> String.trim() |> String.to_integer()
-  defp ensure_int(value) when is_integer(value), do: value
 
   def get_period(chip, output), do: GenServer.call(@me, {:get_period, chip, output})
   def get_duty_cycle(chip, output), do: GenServer.call(@me, {:get_duty_cycle, chip, output})
@@ -75,11 +56,11 @@ defmodule Pwmx.Backend do
     do: GenServer.call(@me, {:set_polarity, chip, output, direction})
 
   defp set_polarity_p(chip, output, direction, state) do
-    if is_enabled?(chip, output) do
+    if _is_enabled?(chip, output, state) do
       {:reply, {:error, :e_output_enabled}, state}
     else
       if state.real do
-        {:reply, File.write(polarity_path(chip, output), direction), state}
+        {:reply, File.write(Paths.polarity_path(chip, output), direction), state}
       else
         new_s =
           case direction do
@@ -109,13 +90,52 @@ defmodule Pwmx.Backend do
     state |> Map.put(:vchips, vchips)
   end
 
+  defp _get_period(chip, output, %{real: false} = s) do
+    {:ok, s.vchips[chip][output].period}
+  end
+
+  defp _get_period(chip, output, %{real: true}) do
+    case File.read(Paths.period_path(chip, output)) do
+      {:ok, v} -> {:ok, v |> Utils.ensure_int}
+      _ -> :error
+    end
+  end
+
+  defp _already_exported?(chip, output, %{real: false} = s) do
+    s.vchips[chip][output][:exported]
+  end
+
+  defp _already_exported?(chip, output, %{real: true}) do
+    File.dir?(Paths.output_path(chip, output))
+  end
+
+  defp _set_duty_cycle_absolute(chip, output, value, unit) do
+    File.write(Paths.duty_cycle_path(chip, output), "#{Utils.to_ns(value, unit)}")
+  end
+
+  defp _is_enabled?(chip, output, %{real: false} = state) do
+    state.vchips[chip][output].enabled
+  end
+  defp _is_enabled?(chip, output, %{real: true}) do
+    case File.read(Paths.enable_path(chip, output)) do
+      {:ok, v} ->
+        case v |> Utils.ensure_int do
+          0 -> false
+          1 -> true
+        end
+
+      _ ->
+        false
+    end
+  end
+
   def handle_call({:enable, chip, output}, _, %{real: false} = s) do
     new_s = s |> update_state({:set_enabled, chip, output}, [true])
     {:reply, :ok, new_s}
   end
 
   def handle_call({:enable, chip, output}, _, %{real: true} = s) do
-    case File.write(enable_path(chip, output), "1") do
+    case File.write(Paths.enable_path(chip, output), "1") do
       :ok -> {:reply, :ok, s}
       _ -> {:reply, :error, s}
     end
@@ -127,7 +147,7 @@ defmodule Pwmx.Backend do
   end
 
   def handle_call({:disable, chip, output}, _, %{real: true} = s) do
-    case File.write(enable_path(chip, output), "0") do
+    case File.write(Paths.enable_path(chip, output), "0") do
       :ok -> {:reply, :ok, s}
       _ -> {:reply, :error, s}
     end
@@ -138,33 +158,22 @@ defmodule Pwmx.Backend do
     set_polarity_p(chip, output, "#{direction}", s)
   end
 
-  def handle_call({:is_enabled?, chip, output}, _, %{real: true} = s) do
-    case File.read(enable_path(chip, output)) do
-      {:ok, v} ->
-        case v |> ensure_int do
-          0 -> {:reply, false, s}
-          1 -> {:reply, true, s}
-        end
-
-      _ ->
-        {:reply, false, s}
-    end
-  end
+  def handle_call({:is_enabled?, chip, output}, _, s), do: {:reply, _is_enabled?(chip, output, s), s}
 
   def handle_call({:set_period, chip, output, value, unit}, _, %{real: false} = s) do
-    new_s = s |> update_state({:set_period, chip, output}, [to_ns(value, unit)])
+    new_s = s |> update_state({:set_period, chip, output}, [Utils.to_ns(value, unit)])
     {:reply, :ok, new_s}
   end
 
   def handle_call({:set_period, chip, output, value, unit}, _, %{real: true} = s) do
-    case File.write(period_path(chip, output), "#{to_ns(value, unit)}") do
+    case File.write(Paths.period_path(chip, output), "#{Utils.to_ns(value, unit)}") do
       :ok -> {:reply, :ok, s}
       {:error, e} -> {:reply, {:error, e}, s}
     end
   end
 
   def handle_call({:set_duty_cycle_absolute, chip, output, value, unit}, _, %{real: false} = s) do
-    new_s = s |> update_state({:set_duty_cycle, chip, output}, [to_ns(value, unit)])
+    new_s = s |> update_state({:set_duty_cycle, chip, output}, [Utils.to_ns(value, unit)])
     {:reply, :ok, new_s}
   end
 
@@ -193,7 +202,7 @@ defmodule Pwmx.Backend do
   def handle_call(:list_chips, _, %{real: false} = s), do: {:reply, {:ok, ["virtualchip0"]}, s}
 
   def handle_call(:list_chips, _, %{real: true} = s) do
-    case File.ls(@base_path) do
+    case File.ls(Paths.base_path) do
       {:ok, chips} -> {:reply, {:ok, chips}, s}
       {:error, e} -> {:reply, {:error, e}, s}
     end
@@ -203,8 +212,8 @@ defmodule Pwmx.Backend do
     do: {:reply, {:ok, 4}, s}
 
   def handle_call({:enumerate_outputs, chip}, _, %{real: true} = s) do
-    case File.read(npwm_path(chip)) do
-      {:ok, num} -> {:reply, {:ok, num |> ensure_int}, s}
+    case File.read(Paths.npwm_path(chip)) do
+      {:ok, num} -> {:reply, {:ok, num |> Utils.ensure_int}, s}
       {:error, e} -> {:reply, {:error, e}, s}
     end
   end
@@ -218,7 +227,7 @@ defmodule Pwmx.Backend do
     if _already_exported?(chip, output, s) do
       {:reply, {:error, :already_exported}, s}
     else
-      {:reply, File.write(export_path(chip), "#{output}"), s}
+      {:reply, File.write(Paths.export_path(chip), "#{output}"), s}
     end
   end
 
@@ -229,7 +238,7 @@ defmodule Pwmx.Backend do
 
   def handle_call({:unexport, chip, output}, _, %{real: true} = s) do
     if _already_exported?(chip, output, s) do
-      {:reply, File.write(unexport_path(chip), "#{output}"), s}
+      {:reply, File.write(Paths.unexport_path(chip), "#{output}"), s}
     else
       {:reply, {:error, :not_exported}, s}
     end
@@ -242,35 +251,12 @@ defmodule Pwmx.Backend do
     do: {:reply, {:ok, s.vchips[chip][output].duty_cycle}, s}
 
   def handle_call({:get_duty_cycle, chip, output}, _, %{real: true} = s) do
-    case File.read(duty_cycle_path(chip, output)) do
-      {:ok, v} -> {:reply, {:ok, v |> ensure_int}, s}
+    case File.read(Paths.duty_cycle_path(chip, output)) do
+      {:ok, v} -> {:reply, {:ok, v |> Utils.ensure_int}, s}
       _ -> {:reply, :error, s}
     end
   end
 
   def handle_call({:already_exported?, chip, output}, _, s),
     do: {:reply, _already_exported?(chip, output, s), s}
-
-  def _get_period(chip, output, %{real: false} = s) do
-    {:ok, s.vchips[chip][output].period}
-  end
-
-  def _get_period(chip, output, %{real: true}) do
-    case File.read(period_path(chip, output)) do
-      {:ok, v} -> {:ok, v |> ensure_int}
-      _ -> :error
-    end
-  end
-
-  def _already_exported?(chip, output, %{real: false} = s) do
-    s.vchips[chip][output][:exported]
-  end
-
-  def _already_exported?(chip, output, %{real: true}) do
-    File.dir?(output_path(chip, output))
-  end
-
-  defp _set_duty_cycle_absolute(chip, output, value, unit) do
-    File.write(duty_cycle_path(chip, output), "#{to_ns(value, unit)}")
-  end
 end
