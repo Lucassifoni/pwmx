@@ -14,15 +14,34 @@ defmodule Pwmx.State do
             exported: false,
             enabled: false
 
+  @type t() :: %__MODULE__{}
+
   alias Pwmx.State
 
+  @spec set_exported(Pwmx.State.t()) :: Pwmx.State.t()
   def set_exported(%State{} = s), do: %{s | exported: true}
+
+  @spec set_unexported(Pwmx.State.t()) :: Pwmx.State.t()
   def set_unexported(%State{} = s), do: %{s | exported: false}
+
+  @spec set_inverted(Pwmx.State.t()) :: Pwmx.State.t()
   def set_inverted(%State{} = s), do: %{s | inverted: true}
+
+  @spec set_not_inverted(Pwmx.State.t()) :: Pwmx.State.t()
   def set_not_inverted(%State{} = s), do: %{s | inverted: false}
+
+  @spec set_period(Pwmx.State.t(), integer()) :: Pwmx.State.t()
   def set_period(%State{} = s, value), do: %{s | period: value}
+
+  @spec set_duty_cycle(Pwmx.State.t(), integer()) :: Pwmx.State.t()
   def set_duty_cycle(%State{} = s, value), do: %{s | duty_cycle: value}
+
+  @spec set_chip(Pwmx.State.t(), binary()) :: Pwmx.State.t()
   def set_chip(%State{} = s, value), do: %{s | chip: value}
+
+  @spec set_output(Pwmx.State.t(), integer()) :: Pwmx.State.t()
   def set_output(%State{} = s, value), do: %{s | output: value}
+
+  @spec set_enabled(Pwmx.State.t(), boolean()) :: Pwmx.State.t()
   def set_enabled(%State{} = s, value), do: %{s | enabled: value}
 end

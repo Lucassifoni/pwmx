@@ -14,8 +14,8 @@ defmodule Pwmx.Enumerator do
         {"pwmchip0", 2}
       ]
   """
-  def list_available_outputs() do
-    case Pwmx.Sys.list_chips() do
+  def list_available_outputs do
+    case Pwmx.Api.list_chips() do
       {:ok, chips} ->
         Enum.reduce(chips, [], fn c, out ->
           out ++ list_available_outputs_for_chip(c)
@@ -26,18 +26,22 @@ defmodule Pwmx.Enumerator do
     end
   end
 
+  defp opened_pin(chip, i) do
+    case Pwmx.Output.start_link({chip, i}) do
+      {:ok, pid} ->
+        Pwmx.Output.close(pid)
+        [{chip, i}]
+
+      _ ->
+        []
+    end
+  end
+
   defp list_available_outputs_for_chip(chip) do
-    case Pwmx.Sys.enumerate_outputs(chip) do
+    case Pwmx.Api.enumerate_outputs(chip) do
       {:ok, n} ->
         Enum.reduce(Range.new(0, n - 1), [], fn i, out ->
-          case Pwmx.Output.start_link({chip, i}) do
-            {:ok, pid} ->
-              Pwmx.Output.close(pid)
-              [{chip, i} | out]
-
-            _ ->
-              out
-          end
+          out ++ opened_pin(chip, i)
         end)
 
       _ ->

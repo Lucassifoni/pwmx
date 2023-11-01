@@ -1,14 +1,27 @@
 defmodule Pwmx.Utils do
-  def to_ns(value, unit) do
+  @moduledoc """
+  Utilities for type and units conversions.
+  """
+
+  @doc """
+  Linux's sysfs PWM interface expects to get period and duty cycle values
+  expressed in nanoseconds.
+  """
+  @spec to_nanoseconds(integer(), :ms | :ns | :s | :us) :: integer()
+  def to_nanoseconds(value, unit) do
     case unit do
-      :s -> trunc(value * 1_000_000_000)
-      :ms -> trunc(value * 1_000_000)
-      :us -> trunc(value * 1_000)
+      :s -> value * 1_000_000_000
+      :ms -> value * 1_000_000
+      :us -> value * 1_000
       :ns -> value
     end
   end
 
-  def ensure_int(value) when is_binary(value), do: value |> String.trim() |> String.to_integer()
-  def ensure_int(value) when is_integer(value), do: value
-
+  @doc """
+  Ensures you have an integer in case you were passing a binary.
+  Can raise, since String.to_integer/1 can raise an ArgumentError
+  """
+  @spec ensure_int!(binary() | integer()) :: integer()
+  def ensure_int!(value) when is_binary(value), do: value |> String.trim() |> String.to_integer()
+  def ensure_int!(value) when is_integer(value), do: value
 end

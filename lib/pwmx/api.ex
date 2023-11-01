@@ -1,14 +1,17 @@
-defmodule Pwmx.Sys do
+defmodule Pwmx.Api do
   @moduledoc """
   Module providing an abstracted API to Pwmx.Output
+  This module will disappear as it just passes calls through to Pwmx.Backend
   """
   alias Pwmx.Backend
 
-  def list_chips(), do: Backend.list_chips()
+  def list_chips, do: Backend.list_chips()
+
   def get_period(chip, output), do: Backend.get_period(chip, output)
   def get_duty_cycle(chip, output), do: Backend.get_duty_cycle(chip, output)
   def enumerate_outputs(chip), do: Backend.enumerate_outputs(chip)
-  defp already_exported?(chip, output), do: Backend.already_exported?(chip, output)
+
+  def already_exported?(chip, output), do: Backend.already_exported?(chip, output)
   def export(chip, output), do: Backend.export(chip, output)
   def unexport(chip, output), do: Backend.unexport(chip, output)
 
@@ -19,7 +22,7 @@ defmodule Pwmx.Sys do
     do: Backend.set_duty_cycle_absolute(chip, output, value, unit)
 
   def set_duty_cycle_normalized(chip, output, value)
-      when is_float(value) and value >= 0 and value <= 1,
+      when is_float(value) and value > 0 and value < 1,
       do: Backend.set_duty_cycle_normalized(chip, output, value)
 
   def is_enabled?(chip, output), do: Backend.is_enabled?(chip, output)

@@ -4,36 +4,23 @@ defmodule Pwmx.Output do
   """
   use GenServer
   @me __MODULE__
-  alias Pwmx.Sys
+  alias Pwmx.Api
   alias Pwmx.State
 
   def init({chip, output}) do
-    case Pwmx.Sys.list_chips() do
-      {:ok, chips} ->
-        if chip in chips do
-          if output < Pwmx.Sys.enumerate_outputs(chip) do
-            case Pwmx.Sys.export(chip, output) do
-              :ok ->
-                state =
-                  %State{}
-                  |> State.set_chip(chip)
-                  |> State.set_output(output)
-                  |> State.set_exported()
+    with {:ok, chips} <- Api.list_chips(),
+         true <- chip in chips,
+         true <- output < Api.enumerate_outputs(chip),
+         :ok <- Api.export(chip, output) do
+      state =
+        %State{}
+        |> State.set_chip(chip)
+        |> State.set_output(output)
+        |> State.set_exported()
 
-                {:ok, state}
-
-              _ ->
-                {:stop, :normal}
-            end
-          else
-            {:stop, :normal}
-          end
-        else
-          {:stop, :normal}
-        end
-
-      _ ->
-        {:stop, :normal}
+      {:ok, state}
+    else
+      _ -> {:stop, :normal}
     end
   end
 
@@ -63,7 +50,7 @@ defmodule Pwmx.Output do
   def get_state(pid), do: GenServer.call(pid, :get_state)
 
   def handle_cast(:close, %State{} = state) do
-    Sys.unexport(state.chip, state.output)
+    Api.unexport(state.chip, state.output)
     Process.send_after(self(), :stop, 16)
     {:noreply, state}
   end
@@ -77,70 +64,70 @@ defmodule Pwmx.Output do
   end
 
   def handle_call(:get_period, _, %State{} = state) do
-    {:ok, period} = Sys.get_period(state.chip, state.output)
+    {:ok, period} = Api.get_period(state.chip, state.output)
     {:reply, period, state |> State.set_period(period)}
   end
 
   def handle_call(:get_duty_cycle, _, %State{} = state) do
-    {:ok, duty_cycle} = Sys.get_duty_cycle(state.chip, state.output)
+    {:ok, duty_cycle} = Api.get_duty_cycle(state.chip, state.output)
     {:reply, duty_cycle, state |> State.set_duty_cycle(duty_cycle)}
   end
 
   def handle_call({:set_period, value, unit}, _, %State{} = state) do
-    Sys.set_period(state.chip, state.output, value, unit)
-    {:ok, period} = Sys.get_period(state.chip, state.output)
+    Api.set_period(state.chip, state.output, value, unit)
+    {:ok, period} = Api.get_period(state.chip, state.output)
     {:reply, self(), state |> State.set_period(period)}
   end
 
   def handle_call({:set_duty_cycle_absolute, value, unit}, _, %State{} = state) do
-    Sys.set_duty_cycle_absolute(state.chip, state.output, value, unit)
-    {:ok, duty_cycle} = Sys.get_duty_cycle(state.chip, state.output)
+    Api.set_duty_cycle_absolute(state.chip, state.output, value, unit)
+    {:ok, duty_cycle} = Api.get_duty_cycle(state.chip, state.output)
     {:reply, self(), state |> State.set_duty_cycle(duty_cycle)}
   end
 
   def handle_call({:set_duty_cycle_normalized, value}, _, %State{} = state) do
-    Sys.set_duty_cycle_normalized(state.chip, state.output, value)
-    {:ok, duty_cycle} = Sys.get_duty_cycle(state.chip, state.output)
+    Api.set_duty_cycle_normalized(state.chip, state.output, value)
+    {:ok, duty_cycle} = Api.get_duty_cycle(state.chip, state.output)
     {:reply, self(), state |> State.set_duty_cycle(duty_cycle)}
   end
 
   def handle_call(:is_enabled?, _, %State{} = state) do
-    res = Sys.is_enabled?(state.chip, state.output)
+    res = Api.is_enabled?(state.chip, state.output)
     {:reply, res, state |> State.set_enabled(res)}
   end
 
   def handle_call(:enable, _, %State{} = state) do
-    Sys.enable(state.chip, state.output)
+    Api.enable(state.chip, state.output)
     {:reply, self(), state |> State.set_enabled(true)}
   end
 
   def handle_call(:disable, _, %State{} = state) do
-    Sys.disable(state.chip, state.output)
+    Api.disable(state.chip, state.output)
     {:reply, self(), state |> State.set_enabled(false)}
   end
 
   def handle_call({:set_polarity, :normal}, _, %State{} = state) do
-    Sys.set_polarity(state.chip, state.output, :normal)
+    Api.set_polarity(state.chip, state.output, :normal)
     {:reply, self(), state |> State.set_inverted()}
   end
 
   def handle_call({:set_polarity, :inverted}, _, %State{} = state) do
-    Sys.set_polarity(state.chip, state.output, :inverted)
+    Api.set_polarity(state.chip, state.output, :inverted)
     {:reply, self(), state |> State.set_not_inverted()}
   end
 
   def handle_call(:enumerate_outputs, _, %State{} = state) do
-    outputs = Sys.enumerate_outputs(state.chip)
+    outputs = Api.enumerate_outputs(state.chip)
     {:reply, outputs, state}
   end
 
   def handle_call(:unexport, _, %State{} = state) do
-    Sys.unexport(state.chip, state.output)
+    Api.unexport(state.chip, state.output)
     {:reply, :ok, state |> State.set_unexported()}
   end
 
   def handle_call(:output_status, _, %State{} = state) do
-    status = Sys.output_status(state.chip, state.output)
+    status = Api.output_status(state.chip, state.output)
     {:reply, status, state}
   end
 end
