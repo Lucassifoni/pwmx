@@ -43,7 +43,8 @@ Pwmx.list_available_outputs()
 
 ### Todo
 
-[ ] More tests now that a first draft is written  
-[ ] Sample project showing behavior on a host & on a board  
+- [ ] More tests now that a first draft is written  
+- [ ] Configurability : it would be great to be able to configure the available chips & outputs in test/dev environments, to be able to test code written for the board.
+- [ ] Sample project showing behavior on a host & on a board  
 
 
