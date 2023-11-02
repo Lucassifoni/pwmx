@@ -29,7 +29,7 @@ In a test or non-linux environment, the `Pwmx.Backend.Sysfs` module is not used,
 
 ### Todo
 
-[ ] More tests now that the draft is written
-[ ] Sample project showing behavior on a host & on a board
+[ ] More tests now that a first draft is written  
+[ ] Sample project showing behavior on a host & on a board  
 
 
