@@ -1,4 +1,7 @@
 defmodule Pwmx.Enumerator do
+  alias Pwmx.Backend
+  alias Pwmx.Output
+
   @moduledoc """
   Convenience module to enumerate *available* PWM outputs. The sysfs interface can report a number of
   pwm pins, but it is not guaranteed that all of them will be able to be exported.
@@ -9,13 +12,14 @@ defmodule Pwmx.Enumerator do
 
       iex> Pwmx.Enumerator.list_available_outputs()
       [
-        {"pwmchip0", 0}
-        {"pwmchip0", 1}
-        {"pwmchip0", 2}
+        {"virtualchip0", 0},
+        {"virtualchip0", 1},
+        {"virtualchip0", 2},
+        {"virtualchip0", 3},
       ]
   """
   def list_available_outputs do
-    case Pwmx.Api.list_chips() do
+    case Backend.list_chips() do
       {:ok, chips} ->
         Enum.reduce(chips, [], fn c, out ->
           out ++ list_available_outputs_for_chip(c)
@@ -27,9 +31,9 @@ defmodule Pwmx.Enumerator do
   end
 
   defp opened_pin(chip, i) do
-    case Pwmx.Output.start_link({chip, i}) do
+    case Output.start_link({chip, i}) do
       {:ok, pid} ->
-        Pwmx.Output.close(pid)
+        Output.close(pid)
         [{chip, i}]
 
       _ ->
@@ -38,7 +42,7 @@ defmodule Pwmx.Enumerator do
   end
 
   defp list_available_outputs_for_chip(chip) do
-    case Pwmx.Api.enumerate_outputs(chip) do
+    case Backend.enumerate_outputs(chip) do
       {:ok, n} ->
         Enum.reduce(Range.new(0, n - 1), [], fn i, out ->
           out ++ opened_pin(chip, i)

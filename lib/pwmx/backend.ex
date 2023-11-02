@@ -40,13 +40,13 @@ defmodule Pwmx.Backend do
   @spec list_chips() :: {:ok, list(binary())} | {:error, any()}
   def list_chips, do: GenServer.call(@me, :list_chips)
 
-  def set_period(chip, output, value, unit),
+  def set_period(chip, output, value, unit \\ :ns),
     do: GenServer.call(@me, {:set_period, chip, output, value, unit})
 
-  def set_duty_cycle_absolute(chip, output, value, unit),
+  def set_duty_cycle_absolute(chip, output, value, unit \\ :ns),
     do: GenServer.call(@me, {:set_duty_cycle_absolute, chip, output, value, unit})
 
-  def set_duty_cycle_normalized(chip, output, value),
+  def set_duty_cycle_normalized(chip, output, value) when is_float(value) and value > 0 and value < 1,
     do: GenServer.call(@me, {:set_duty_cycle_normalized, chip, output, value})
 
   def is_enabled?(chip, output), do: GenServer.call(@me, {:is_enabled?, chip, output})
