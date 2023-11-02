@@ -27,6 +27,20 @@ Pwmx.Output.enable(pid) |> Pwmx.Output.set_period(1_000_000, :us)
 ## Testing & non-linux hosts
 In a test or non-linux environment, the `Pwmx.Backend.Sysfs` module is not used, and calls are instead dispatched to `Pwmx.Backend.Virtual`, which keeps track of your operations on PWM outputs with the `Pwmx.State` struct. This struct isn't meant to be used directly as it wouldn't be of particular help.
 
+## What PWM outputs do I have ?
+
+An helper function can help you. Note that this function **actually exports then closes each output** as it seems that after a bit of testing, it cannot be taken for granted that every output reported by `/sys/class/pwm/chip/npwm` is able to be opened. Note that already exported outputs by something else in your system will not show up in this list as the export will fail.
+
+```elixir
+Pwmx.list_available_outputs()
+[
+    {"virtualchip0", 0},
+    {"virtualchip0", 1},
+    {"virtualchip0", 2},
+    {"virtualchip0", 3}
+]
+```
+
 ### Todo
 
 [ ] More tests now that a first draft is written  
